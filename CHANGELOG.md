@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Asking in plain words ("read that to me", "read it out loud") now reads Claude's previous reply, the same as `/read-aloud:read`. Before, the request itself counted as the newest message and there was nothing to read.
+
 ## 0.2.1
 
 - Windows: starting the warm reader no longer opens an empty terminal window. uv's Python launcher started the real interpreter without a console to inherit, so Windows gave it a visible one.

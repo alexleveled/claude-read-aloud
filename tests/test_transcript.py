@@ -141,3 +141,20 @@ def test_find_by_session_id(env):
     touch(target, 1_000_000)
     touch(newer, 2_000_000)
     assert transcript.find_transcript(session_id=sid, cwd=str(cwd)) == target
+
+
+@pytest.mark.parametrize("text", ["read that to me", "Read it out loud", "can you read your answer?",
+                                  "please read that aloud", "read the last reply", "ok, read it again please"])
+def test_plain_read_requests_are_skipped(text):
+    assert transcript.is_read_request(text)
+
+
+@pytest.mark.parametrize("text", ["read this file and fix it", "read the README", "what did you read?",
+                                  "I read that article yesterday"])
+def test_real_messages_are_not_read_requests(text):
+    assert not transcript.is_read_request(text)
+
+
+def test_last_reply_skips_plain_read_request():
+    entries = [user("explain it"), asst("Here is the explanation."), user("read that to me")]
+    assert transcript.last_reply(entries) == "Here is the explanation."

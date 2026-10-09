@@ -115,6 +115,17 @@ def prompt_text(e):
 
 
 READ_COMMAND = re.compile(r"<command-name>/(?:[\w-]+:)?read</command-name>")
+# The same request in plain words. Kept narrow on purpose: the whole message has to be the
+# request, so "read this file and fix it" is still a real message.
+READ_REQUEST = re.compile(
+    r"^\W*(?:(?:hey|ok|okay|please|can you|could you|would you)[\s,]+)*"
+    r"(?:read|say|speak)\s+(?:that|it|this|the last (?:one|reply|message|answer|response)"
+    r"|your (?:last )?(?:reply|message|answer|response)|the (?:reply|answer|response))"
+    r"(?:\s+(?:to me|for me|out loud|aloud|again|back))*[\s,]*(?:please|thanks)?\W*$", re.I)
+
+
+def is_read_request(text):
+    return bool(READ_COMMAND.search(text) or READ_REQUEST.match(text.strip()))
 NOT_TYPED = ("<task-notification>", "Base directory for this skill", "<local-command-", "Caveat:")
 
 
@@ -141,7 +152,7 @@ def last_reply(entries, full=False):
             "This transcript has no user or assistant entries. Claude Code may have changed "
             "its transcript format; please open an issue on the Read Aloud repo.")
     human = [i for i, e in enumerate(entries) if is_human(e)]
-    asks = [i for i in human if not READ_COMMAND.search(prompt_text(entries[i]))]
+    asks = [i for i in human if not is_read_request(prompt_text(entries[i]))]
     if not asks:
         return ""
     start = asks[-1]
