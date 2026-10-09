@@ -1,0 +1,13 @@
+{
+  "name": "read-aloud",
+  "version": "0.1.0",
+  "description": "Hear Claude's last reply read aloud with a natural local voice (Kokoro). Nothing leaves your machine. Works in the terminal and, with the companion extension, from a button in VS Code.",
+  "author": {
+    "name": "alexleveled",
+    "url": "https://github.com/alexleveled"
+  },
+  "homepage": "https://github.com/alexleveled/claude-read-aloud",
+  "repository": "https://github.com/alexleveled/claude-read-aloud",
+  "license": "MIT",
+  "keywords": ["tts", "text-to-speech", "accessibility", "kokoro", "voice", "read-aloud"]
+}

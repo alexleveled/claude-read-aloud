@@ -1,0 +1,63 @@
+{
+  "name": "claude-read-aloud",
+  "displayName": "Claude Read Aloud",
+  "publisher": "alexleveled",
+  "version": "0.3.0",
+  "description": "A ▶ Read button for Claude Code: hear Claude's last reply in a natural local voice. Companion to the Read Aloud Claude Code plugin.",
+  "license": "MIT",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexleveled/claude-read-aloud"
+  },
+  "bugs": "https://github.com/alexleveled/claude-read-aloud/issues",
+  "homepage": "https://github.com/alexleveled/claude-read-aloud#readme",
+  "keywords": ["claude", "claude code", "tts", "text to speech", "read aloud", "accessibility"],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "claudeReadAloud.read",
+        "title": "Claude: Read Last Reply Aloud"
+      },
+      {
+        "command": "claudeReadAloud.stop",
+        "title": "Claude: Stop Reading"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claudeReadAloud.read",
+        "key": "ctrl+alt+r"
+      },
+      {
+        "command": "claudeReadAloud.stop",
+        "key": "ctrl+alt+s"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Read Aloud",
+      "properties": {
+        "claudeReadAloud.readerScript": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the plugin's reader/reader.py. Leave empty: the Read Aloud plugin records its own location the first time Claude Code starts with it installed."
+        },
+        "claudeReadAloud.uvPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to uv. Leave empty to find it automatically."
+        }
+      }
+    }
+  }
+}
