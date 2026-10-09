@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Windows: starting the warm reader no longer opens an empty terminal window. uv's Python launcher started the real interpreter without a console to inherit, so Windows gave it a visible one.
+
 ## 0.2.0
 
 - Warm reader: a background process keeps the voice model loaded, so a read starts speaking in under a second instead of about four. It shuts down after 15 minutes without a read (`warm_minutes`, 0 turns it off) and starts again on the next one.

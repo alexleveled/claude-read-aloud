@@ -34,8 +34,8 @@ DEFAULTS = {
     "mode": "final",       # final = last message of the reply, full = every message in the turn
     "model": "int8",       # int8 (92 MB) | fp16 (177 MB) | full (326 MB)
     "picker_minutes": 30,  # VS Code: sessions active this recently show up in the picker
-    "skip_sessions": [],
-    "warm_minutes": 15,    # keep the voice model loaded this long after the last read (0 = never)   # never read sessions whose first lines contain any of these strings
+    "skip_sessions": [],   # never read sessions whose first lines contain any of these strings
+    "warm_minutes": 15,    # keep the voice model loaded this long after the last read (0 = never)
 }
 
 

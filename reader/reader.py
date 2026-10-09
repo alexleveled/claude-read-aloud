@@ -53,13 +53,19 @@ def _spawn(args):
     exe = Path(sys.executable)
     kw = dict(stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
               close_fds=True, cwd=str(HERE))
-    if WINDOWS:
-        pyw = exe.with_name("pythonw.exe")
-        exe = pyw if pyw.exists() else exe
-        kw["creationflags"] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    else:
-        kw["start_new_session"] = True
-    return subprocess.Popen([str(exe), str(Path(__file__).resolve()), *args], **kw)
+    cmd = [str(exe), str(Path(__file__).resolve()), *args]
+    if not WINDOWS:
+        return subprocess.Popen(cmd, start_new_session=True, **kw)
+    # In a uv environment python.exe / pythonw.exe are launchers that start the real
+    # interpreter as a child. A child with no console to inherit pops up a terminal window,
+    # so give the launcher a hidden console (CREATE_NO_WINDOW) for the child to inherit,
+    # rather than none (DETACHED_PROCESS). Breaking away from the caller's job keeps the
+    # reader alive when VS Code closes, where the job allows it.
+    flags = 0x08000000 | 0x00000200  # CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
+    try:
+        return subprocess.Popen(cmd, creationflags=flags | 0x01000000, **kw)  # + CREATE_BREAKAWAY_FROM_JOB
+    except OSError:
+        return subprocess.Popen(cmd, creationflags=flags, **kw)
 
 
 def ask(req, start=True, timeout=30):

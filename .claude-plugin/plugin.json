@@ -1,6 +1,6 @@
 {
   "name": "read-aloud",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Hear Claude's last reply read aloud with a natural local voice (Kokoro). Nothing leaves your machine. Works in the terminal and, with the companion extension, from a button in VS Code.",
   "author": {
     "name": "alexleveled",
