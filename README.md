@@ -73,11 +73,14 @@ Everything lives in `~/.claude-voice/read-aloud/settings.json`. The commands abo
 | `speed` | `1.15` | |
 | `mode` | `final` | `full` makes every read include the whole turn |
 | `model` | `int8` | `int8` 92 MB, `fp16` 177 MB, `full` 326 MB. Same speed; the bigger ones sound slightly cleaner |
+| `warm_minutes` | `15` | how long the voice model stays loaded after a read. `0` loads it fresh every time |
 | `skip_sessions` | `[]` | text from the first message of sessions to never read, like an always-on bot that would otherwise always be "newest" |
 
 ## How it works
 
-When you ask for a read, the plugin finds the current session's transcript under `~/.claude/projects/`. It takes Claude's reply to your last message and cleans the markdown into speakable sentences. Then it hands off to a background process that generates each sentence while the previous one plays, so the voice starts in a few seconds even for a long reply.
+When you ask for a read, the plugin finds the current session's transcript under `~/.claude/projects/`. It takes Claude's reply to your last message and cleans the markdown into speakable sentences. Then it hands the text to a background process that keeps the voice model loaded and generates each sentence while the previous one plays. With the model already loaded, the first word comes in under a second, even for a long reply.
+
+That background process uses about 280 MB of memory while it's loaded. It shuts itself down after 15 minutes without a read, and the next read starts it again, which takes about five seconds that one time. Change the timeout with `warm_minutes`, or run `/read-aloud:read shutdown` to free the memory right away.
 
 Claude Code's transcript format isn't a public API. If an update changes it, Read Aloud says so instead of reading the wrong thing. Please [open an issue](https://github.com/alexleveled/claude-read-aloud/issues) if you see that message.
 

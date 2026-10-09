@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const { execFile } = require('child_process');
 
 // Shared with the Read Aloud plugin (reader/home.py).
@@ -9,6 +10,7 @@ const HOME = process.env.CLAUDE_VOICE_HOME || path.join(os.homedir(), '.claude-v
 const STATE = path.join(HOME, 'read-aloud');
 const PID_FILE = path.join(STATE, 'reader.pid');
 const INSTALL = path.join(STATE, 'install.json');
+const DAEMON = path.join(STATE, 'daemon.json');
 
 const INSTALL_HINT = 'Read Aloud needs the Claude Code plugin. In Claude Code, run: '
   + '/plugin marketplace add alexleveled/claude-plugins, then /plugin install read-aloud@alexleveled, '
@@ -44,6 +46,37 @@ function locate() {
   const setting = vscode.workspace.getConfiguration('claudeReadAloud').get('readerScript');
   const reader = [setting, info.reader].find(exists);
   return { reader, uv: findUv(info.uv) };
+}
+
+// Talk straight to the warm reader when it's up: no process to start, so a read begins in
+// well under a second. Resolves null when it isn't running.
+function askDaemon(req, timeout) {
+  return new Promise((resolve) => {
+    let d;
+    try { d = JSON.parse(fs.readFileSync(DAEMON, 'utf8')); } catch (e) { return resolve(null); }
+    const sock = net.createConnection({ host: '127.0.0.1', port: d.port });
+    let buf = '';
+    const done = (v) => { sock.destroy(); resolve(v); };
+    sock.setTimeout(timeout, () => done(null));
+    sock.on('error', () => done(null));
+    sock.on('connect', () => sock.write(JSON.stringify({ ...req, token: d.token }) + '\n'));
+    sock.on('data', (chunk) => {
+      buf += chunk.toString('utf8');
+      if (buf.endsWith('\n')) {
+        try { done(JSON.parse(buf)); } catch (e) { done(null); }
+      }
+    });
+  });
+}
+
+// Reader command: warm reader first, then the plugin's script through uv (which starts it).
+async function call(req, args, timeout, callback) {
+  const resp = await askDaemon(req, timeout);
+  if (resp) {
+    if (req.cmd === 'sessions') return callback(null, JSON.stringify(resp.data || []), '');
+    return callback(resp.ok ? null : new Error(resp.message), resp.message || '', '');
+  }
+  if (!run(args, timeout, callback)) callback(new Error('not installed'), '', '');
 }
 
 function run(args, timeout, callback) {
@@ -95,7 +128,9 @@ function activate(context) {
 
   const startRead = (args) => {
     item.text = '$(loading~spin) Reading...';
-    const ok = run(['read', ...args], 60000, (error, stdout, stderr) => {
+    const req = { cmd: 'read' };
+    for (let i = 0; i < args.length; i += 2) req[args[i].replace(/^--/, '')] = args[i + 1];
+    call(req, ['read', ...args], 60000, (error, stdout, stderr) => {
       busy = false;
       const out = String(stdout || '').trim();
       if (error) {
@@ -105,7 +140,6 @@ function activate(context) {
         vscode.window.setStatusBarMessage(out, 5000);
       }
     });
-    if (!ok) { busy = false; setIdle(); }
   };
 
   context.subscriptions.push(
@@ -117,7 +151,8 @@ function activate(context) {
       item.text = '$(loading~spin) Finding sessions...';
 
       // More than one Claude session active recently in this folder: let the user pick.
-      const ok = run(['sessions', '--cwd', cwd], 30000, async (error, stdout) => {
+      call({ cmd: 'sessions', cwd }, ['sessions', '--cwd', cwd], 30000, async (error, stdout) => {
+        if (error && error.message === 'not installed') { busy = false; return setIdle(); }
         let sessions = [];
         try { sessions = error ? [] : JSON.parse(String(stdout)); } catch (e) { sessions = []; }
         if (sessions.length === 0) return startRead(['--cwd', cwd]);  // reader explains why
@@ -136,12 +171,11 @@ function activate(context) {
         if (!pick) { busy = false; return setIdle(); }
         startRead(['--transcript', pick.transcript]);
       });
-      if (!ok) { busy = false; setIdle(); }
     }),
     vscode.commands.registerCommand('claudeReadAloud.stop', () => {
-      run(['stop'], 15000, (error, stdout, stderr) => {
-        if (error) vscode.window.showErrorMessage('Read Aloud: ' + (stderr || error.message));
-        else setIdle();
+      askDaemon({ cmd: 'stop' }, 5000).then(() => {
+        try { fs.unlinkSync(PID_FILE); } catch (e) { /* already gone */ }
+        setIdle();
       });
     })
   );

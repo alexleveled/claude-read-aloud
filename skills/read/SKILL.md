@@ -20,6 +20,7 @@ Pick the command from the user's arguments:
 | `full` | `read --session "${CLAUDE_SESSION_ID}" --cwd "$PWD" --full` |
 | `stop` | `stop` |
 | `status` | `status` |
+| `shutdown` | `shutdown` |
 | `voices` | `voices` |
 | `voice <name>` / `speed <n>` / `mode <final\|full>` / `model <int8\|fp16\|full>` | `settings <key> <value>` |
 | `test` | `test` |
@@ -57,6 +58,7 @@ Finish with a short summary: how to read (`/read-aloud:read`, or "read that to m
 
 ## Notes
 
+- Reads go through a warm background reader that keeps the model loaded (about 280 MB) and shuts down after `warm_minutes` (default 15) without a read. `shutdown` frees it right away, and `settings warm_minutes 0` turns it off.
 - Everything runs locally. Kokoro is a small open model that runs on the CPU, and no text or audio leaves the machine.
 - Settings, the model and logs live in `~/.claude-voice/` (shared with the Claude Done Alerts plugin, so the model downloads once).
 - To skip a background session that keeps showing up as "newest" (an always-on bot, for example), add a string from its first message to `skip_sessions` in `~/.claude-voice/read-aloud/settings.json`.

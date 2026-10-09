@@ -2,7 +2,7 @@
   "name": "claude-read-aloud",
   "displayName": "Claude Read Aloud",
   "publisher": "alexleveled",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A ▶ Read button for Claude Code: hear Claude's last reply in a natural local voice. Companion to the Read Aloud Claude Code plugin.",
   "license": "MIT",
   "icon": "icon.png",

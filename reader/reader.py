@@ -4,34 +4,33 @@
 #     "kokoro-onnx>=0.4.7",
 #     "sounddevice>=0.4.6",
 #     "filelock>=3.12",
-#     "psutil>=5.9",
 # ]
 # ///
 """Read Aloud: speaks Claude Code's last reply with Kokoro, a local voice model.
 
     reader.py read [--session ID] [--cwd DIR] [--transcript FILE] [--full]
-    reader.py stop | status
+    reader.py stop | status | shutdown
     reader.py sessions [--cwd DIR] [--minutes N]      JSON list for the VS Code picker
     reader.py text FILE [--full]                      print the cleaned text (debug)
-    reader.py settings [voice|speed|mode|model VALUE]
+    reader.py settings [voice|speed|mode|model|warm_minutes VALUE]
     reader.py voices
     reader.py test                                    speak one line and wait
     reader.py doctor                                  JSON health report for /read setup
     reader.py download                                fetch the voice model now
     reader.py session-start                           SessionStart hook (background)
+    reader.py serve                                   run the warm reader (started for you)
 
 Run it through uv (`uv run --script reader.py ...`), which installs the packages listed above
-on first use. `read` returns at once: a detached worker does the talking, generating one
-chunk ahead of playback so audio starts in about a second.
+on first use. `read`, `stop`, `status` and `sessions` are handled by the warm reader
+(daemon.py), a background process that keeps the voice model loaded and starts itself on
+the first read. It shuts down after `warm_minutes` (default 15) without a read.
 """
 import json
 import os
-import queue
 import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
 from pathlib import Path
 
@@ -40,12 +39,13 @@ sys.path.insert(0, str(HERE))
 
 import home  # noqa: E402
 import speech  # noqa: E402
+import daemon  # noqa: E402
 import transcript  # noqa: E402
 
 WINDOWS = os.name == "nt"
 
 
-# ---------------------------------------------------------------- process control
+# ---------------------------------------------------------------- the warm reader
 
 def _spawn(args):
     """Start this script detached from the caller, so it outlives the /read command or
@@ -62,126 +62,19 @@ def _spawn(args):
     return subprocess.Popen([str(exe), str(Path(__file__).resolve()), *args], **kw)
 
 
-def _worker_process():
-    """The running worker, or None. Checks the command line too, so a recycled PID that now
-    belongs to some other program is never mistaken for a read in progress."""
-    import psutil
-
-    try:
-        pid = int(home.PID_FILE.read_text().strip())
-        p = psutil.Process(pid)
-        if p.is_running() and any("reader.py" in a for a in p.cmdline()):
-            return p
-    except (OSError, ValueError, psutil.Error):
-        pass
-    return None
-
-
-def stop():
-    import psutil
-
-    p = _worker_process()
-    if p:
-        for c in p.children(recursive=True) + [p]:
-            try:
-                c.kill()
-            except psutil.Error:
-                pass
-    home.PID_FILE.unlink(missing_ok=True)
-    return p is not None
-
-
-# ---------------------------------------------------------------- worker
-
-def worker(job_path):
-    import voice
-
-    home.PID_FILE.write_text(str(os.getpid()))
-    t0 = time.time()
-    # The audio library takes most of a second to import; do it while the model loads.
-    threading.Thread(target=lambda: __import__("sounddevice"), daemon=True).start()
-    try:
-        s = home.load_settings()
-        chunks = speech.chunk(Path(job_path).read_text(encoding="utf-8"))
-        k = voice.load_kokoro(s["model"])
-        name = s["voice"]
-        q = queue.Queue(maxsize=2)
-
-        def produce():
-            for i, c in enumerate(chunks):
-                try:
-                    q.put(k.create(c, voice=name, speed=float(s["speed"]), lang=voice.lang_for(name)))
-                except Exception as e:  # one bad chunk shouldn't end the read
-                    home.log(f"chunk {i} failed: {e!r}")
-            q.put(None)
-
-        threading.Thread(target=produce, daemon=True).start()
-        first = True
-        while (item := q.get()) is not None:
-            if first:
-                home.log(f"{len(chunks)} chunks, first audio after {time.time() - t0:.1f}s")
-                first = False
-            voice.play(*item)
-    finally:
-        try:
-            if home.PID_FILE.read_text().strip() == str(os.getpid()):
-                home.PID_FILE.unlink()
-        except OSError:
-            pass
-
-
-def start(text):
-    stop()
-    home.STATE.mkdir(parents=True, exist_ok=True)
-    job = home.STATE / "job.txt"
-    job.write_text(text, encoding="utf-8")
-    proc = _spawn(["worker", str(job)])
-    home.PID_FILE.write_text(str(proc.pid))
-
-
-# ---------------------------------------------------------------- commands
-
-def cmd_read(opts):
-    s = home.load_settings()
-    path = opts.get("--transcript") or transcript.find_transcript(
-        opts.get("--session"), opts.get("--cwd") or os.getcwd(), s["skip_sessions"])
-    if not path:
-        return "No Claude Code session found for this folder."
-    raw = transcript.last_reply(transcript.load(path), "--full" in opts or s["mode"] == "full")
-    text = speech.clean_for_speech(raw)
-    if not text.strip():
-        return "Nothing to read yet."
-    start(text)
-    words = len(text.split())
-    mins = max(1, round(words / (160 * float(s["speed"]))))
-    import voice
-    if voice.missing(s["model"]):
-        return (f"Downloading the voice model first (one time, {voice.FILES[s['model']][1] // 1_000_000} MB). "
-                f"Reading {words} words after that.")
-    return f"Reading {words} words (about {mins} min)."
-
-
-def cmd_sessions(opts):
-    out = []
-    s = home.load_settings()
-    minutes = int(opts.get("--minutes") or s["picker_minutes"])
-    for f in transcript.recent_sessions(opts.get("--cwd") or os.getcwd(), minutes, s["skip_sessions"]):
-        try:
-            reply = transcript.last_reply(transcript.load(f))
-        except (OSError, transcript.TranscriptFormatError):
-            continue
-        if not reply.strip():
-            continue
-        project, title = transcript.session_info(f)
-        preview = re.sub(r"\s+", " ", speech.clean_for_speech(reply)).strip()
-        out.append({
-            "transcript": str(f),
-            "project": project,
-            "title": title,
-            "age_seconds": int(time.time() - f.stat().st_mtime),
-            "preview": preview[:110] + ("…" if len(preview) > 110 else ""),
-        })
-    return out
+def ask(req, start=True, timeout=30):
+    """Send a request to the warm reader, starting it first if it isn't running."""
+    resp = daemon.request(req, timeout)
+    if resp is not None or not start:
+        return resp
+    _spawn(["serve"])
+    deadline = time.time() + 20
+    while time.time() < deadline:
+        time.sleep(0.1)
+        resp = daemon.request(req, timeout)
+        if resp is not None:
+            return resp
+    return {"ok": False, "message": "The reader didn't start. See ~/.claude-voice/read-aloud/reader.log."}
 
 
 def cmd_settings(args):
@@ -205,10 +98,13 @@ def cmd_settings(args):
     elif key == "model":
         if value not in ("int8", "fp16", "full"):
             return "Model is int8, fp16 or full."
-    elif key == "picker_minutes":
-        value = int(value)
+    elif key in ("picker_minutes", "warm_minutes"):
+        try:
+            value = int(value)
+        except ValueError:
+            return f"{key} must be a whole number of minutes."
     else:
-        return "Settings are voice, speed, mode, model and picker_minutes."
+        return "Settings are voice, speed, mode, model, picker_minutes and warm_minutes."
     home.save_settings(**{key: value})
     extra = " It downloads on the next read." if key == "model" and voice.missing(value) else ""
     return f"{key} set to {value}.{extra}"
@@ -238,6 +134,7 @@ def cmd_doctor():
         "transcripts_dir": str(transcript.projects_root()),
         "transcripts_found": transcript.projects_root().is_dir(),
         "vscode_cli": shutil.which("code"),
+        "warm_reader": daemon.request({"cmd": "status"}, timeout=5),
     }
     try:
         import sounddevice as sd
@@ -287,16 +184,34 @@ def main():
         i += 1
 
     try:
-        if cmd == "worker":
-            worker(args[1])
+        if cmd == "serve":
+            daemon.Daemon().serve()
         elif cmd == "read":
-            print(cmd_read(opts))
+            req = {"cmd": "read", "full": "--full" in opts}
+            for k in ("transcript", "session", "cwd"):
+                if isinstance(opts.get(f"--{k}"), str):
+                    req[k] = opts[f"--{k}"]
+            req.setdefault("cwd", os.getcwd())
+            resp = ask(req)
+            print(resp["message"])
+            if not resp["ok"]:
+                sys.exit(1)
         elif cmd == "stop":
-            print("Stopped reading." if stop() else "Nothing was playing.")
+            resp = ask({"cmd": "stop"}, start=False)
+            home.PID_FILE.unlink(missing_ok=True)
+            print(resp["message"] if resp else "Nothing was playing.")
         elif cmd == "status":
-            print("reading" if _worker_process() else "idle")
+            resp = ask({"cmd": "status"}, start=False)
+            print(f"{resp['message']} (warm)" if resp else "idle (cold)")
+        elif cmd == "shutdown":
+            resp = ask({"cmd": "shutdown"}, start=False)
+            print(resp["message"] if resp else "The warm reader wasn't running.")
         elif cmd == "sessions":
-            print(json.dumps(cmd_sessions(opts), ensure_ascii=False))
+            req = {"cmd": "sessions", "cwd": opts.get("--cwd") or os.getcwd()}
+            if opts.get("--minutes"):
+                req["minutes"] = int(opts["--minutes"])
+            resp = ask(req)
+            print(json.dumps(resp.get("data") or [], ensure_ascii=False))
         elif cmd == "text":
             print(speech.clean_for_speech(transcript.last_reply(transcript.load(args[1]), "--full" in opts)))
         elif cmd == "settings":
@@ -324,7 +239,7 @@ def main():
         sys.exit(2)
     except Exception as e:
         home.log(f"{cmd} failed: {e!r}")
-        if cmd == "worker":
+        if cmd == "serve":
             return
         print(f"Read Aloud error: {e}")
         sys.exit(1)

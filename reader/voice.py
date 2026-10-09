@@ -106,14 +106,17 @@ def lang_for(voice):
     return LANGS.get(voice[:1], "en-us")
 
 
-def play(audio, sample_rate):
+def play(audio, sample_rate, cancel=None):
     """Play one chunk while holding the shared playback lock, so a Done Alerts notification
-    waits for the end of this sentence instead of talking over it."""
+    waits for the end of this sentence instead of talking over it. `cancel` (an Event) stops
+    the wait for the lock; sounddevice.stop() from another thread cuts the chunk short."""
     import sounddevice as sd
     from filelock import FileLock, Timeout
 
     lock = FileLock(str(PLAY_LOCK))
     while True:
+        if cancel is not None and cancel.is_set():
+            return
         try:
             lock.acquire(timeout=0.2)
             break
