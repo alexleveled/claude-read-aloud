@@ -9,9 +9,9 @@ Read Aloud reads Claude Code's last reply out loud in a natural voice. The voice
 - It reads the way you'd want it read: code blocks get skipped, tables get read row by row, `src/app.py` becomes "app dot py", and links and markdown symbols disappear
 - Several Claude sessions open in one folder? The VS Code button asks which one to read
 
-https://github.com/user-attachments/assets/f265c10a-4cf2-4ddd-90b4-9d5b9ed0e09d
+[![Read Aloud demo: the Read button asks which Claude session to read, then reads it](docs/demo.gif)](docs/demo.mp4)
 
-*Two Claude sessions open side by side. ▶ Read asks which one to read, then reads it.*
+*Two Claude sessions open side by side. ▶ Read asks which one to read, then reads it. Tap the GIF for the full video.*
 
 ## Install
 
