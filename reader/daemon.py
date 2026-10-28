@@ -13,7 +13,7 @@ Protocol: one JSON object per line in each direction. Every request carries the 
 daemon.json, so only processes that can read the user's ~/.claude-voice folder can use it.
 
     {"token": ..., "cmd": "read", "transcript"|"session"|"cwd": ..., "full": bool}
-    {"token": ..., "cmd": "sessions", "cwd": ..., "minutes": n}
+    {"token": ..., "cmd": "sessions", "cwd": ..., "minutes": n, "older": n}
     {"token": ..., "cmd": "stop" | "status" | "ping" | "shutdown"}
     -> {"ok": true, "message": "...", "data": ...}
 """
@@ -147,7 +147,7 @@ class Daemon:
             DAEMON_FILE.unlink(missing_ok=True)  # stop new clients finding us right away
             return {"ok": True, "message": "Warm reader shut down."}
         if cmd == "sessions":
-            return {"ok": True, "data": sessions(req.get("cwd") or os.getcwd(), req.get("minutes"))}
+            return {"ok": True, "data": sessions(req.get("cwd") or os.getcwd(), req.get("minutes"), req.get("older"))}
         if cmd == "read":
             return self.read(req)
         return {"ok": False, "message": f"Unknown command {cmd!r}"}
@@ -251,28 +251,56 @@ class Daemon:
                 pass
 
 
-def sessions(cwd, minutes=None):
+# Picker entries by (path, mtime, size). Older sessions don't change, so after the first
+# click they cost nothing; long transcripts can run to tens of MB.
+_described = {}
+
+
+def _describe(f, st):
     import re
 
+    key = (str(f), st.st_mtime, st.st_size)
+    if key not in _described:
+        try:
+            entries = transcript.load(f)
+            reply = transcript.last_reply(entries)
+        except (OSError, transcript.TranscriptFormatError):
+            reply = ""
+        if not reply.strip():
+            _described[key] = None
+        else:
+            project, title = transcript.session_info(f, entries)
+            preview = re.sub(r"\s+", " ", speech.clean_for_speech(reply)).strip()
+            _described[key] = {
+                "transcript": str(f),
+                "project": project,
+                "title": title,
+                "preview": preview[:110] + ("…" if len(preview) > 110 else ""),
+            }
+    return _described[key]
+
+
+def sessions(cwd, minutes=None, older=None):
+    """Sessions for the VS Code picker, newest first: every one active in the last
+    `picker_minutes` (marked recent), then up to `picker_older` older ones."""
     s = home.load_settings()
     minutes = int(minutes or s["picker_minutes"])
-    out = []
-    for f in transcript.recent_sessions(cwd, minutes, s["skip_sessions"]):
+    older = int(s["picker_older"] if older is None else older)
+    now = time.time()
+    out, n_older = [], 0
+    for f in transcript.all_sessions(cwd, s["skip_sessions"]):
         try:
-            reply = transcript.last_reply(transcript.load(f))
-        except (OSError, transcript.TranscriptFormatError):
+            st = f.stat()
+        except OSError:
             continue
-        if not reply.strip():
+        recent = st.st_mtime >= now - minutes * 60
+        if not recent and n_older >= older:
+            break
+        item = _describe(f, st)
+        if not item:
             continue
-        project, title = transcript.session_info(f)
-        preview = re.sub(r"\s+", " ", speech.clean_for_speech(reply)).strip()
-        out.append({
-            "transcript": str(f),
-            "project": project,
-            "title": title,
-            "age_seconds": int(time.time() - f.stat().st_mtime),
-            "preview": preview[:110] + ("…" if len(preview) > 110 else ""),
-        })
+        n_older += not recent
+        out.append({**item, "age_seconds": int(now - st.st_mtime), "recent": recent})
     return out
 
 

@@ -19,7 +19,7 @@ Then start a new Claude Code session once so the plugin can register itself.
 - Ctrl+Alt+S stops.
 - Or click the ▶ Read button in the status bar.
 
-If more than one Claude session in the open folder replied in the last 30 minutes, a picker lets you choose which one to read.
+A picker lets you choose which Claude session in the open folder to read. Sessions active in the last 30 minutes come first, under Recent, with the newest already selected, so Enter reads it. Below that, under Older, are the 10 most recent other sessions, however long ago they were used. Change both numbers with the plugin's `picker_minutes` and `picker_older` settings.
 
 ## Settings
 

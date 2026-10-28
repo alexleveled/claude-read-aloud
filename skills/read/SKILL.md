@@ -45,7 +45,7 @@ Walk the user through this one step at a time. Ask before installing anything.
    - Linux: PortAudio is usually missing. Ask, then install `libportaudio2` (Debian/Ubuntu: `sudo apt install libportaudio2`, Fedora: `sudo dnf install portaudio`).
    - Elsewhere: no output device was found. Ask the user to check that speakers or headphones are connected.
 4. Run `test`. Ask the user whether they heard the voice. If not, show the `audio_error` from `doctor` and work through it with them.
-5. **VS Code button:** if `vscode_cli` is set (or the user mentions Cursor or Windsurf), offer the companion extension. It adds a ▶ Read button to the status bar, Ctrl+Alt+R to read and Ctrl+Alt+S to stop, plus a session picker when several Claude sessions are running in the same folder. If the user wants it:
+5. **VS Code button:** if `vscode_cli` is set (or the user mentions Cursor or Windsurf), offer the companion extension. It adds a ▶ Read button to the status bar, Ctrl+Alt+R to read and Ctrl+Alt+S to stop, plus a picker of the Claude sessions in the open folder (recent ones first). If the user wants it:
 
    ```bash
    code --install-extension "${CLAUDE_PLUGIN_ROOT}/vscode/claude-read-aloud.vsix" --force

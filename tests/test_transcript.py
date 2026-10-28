@@ -158,3 +158,34 @@ def test_real_messages_are_not_read_requests(text):
 def test_last_reply_skips_plain_read_request():
     entries = [user("explain it"), asst("Here is the explanation."), user("read that to me")]
     assert transcript.last_reply(entries) == "Here is the explanation."
+
+
+def test_all_and_recent_sessions(env):
+    import time
+    cwd, pdir = env
+    old = write(pdir / "old.jsonl", [user("x")])
+    new = write(pdir / "new.jsonl", [user("y")])
+    bot = write(pdir / "bot.jsonl", [user("Session supervisor boot now")])
+    now = time.time()
+    touch(old, now - 10 * 86400)
+    touch(new, now - 60)
+    touch(bot, now)
+    skip = ("Session supervisor boot",)
+    assert transcript.all_sessions(str(cwd), skip) == [new, old]
+    assert transcript.recent_sessions(str(cwd), 30, skip) == [new]
+
+
+def test_picker_lists_recent_then_older(env):
+    import time
+    import daemon
+    cwd, pdir = env
+    now = time.time()
+    files = []
+    for i, age in enumerate([30, 5 * 86400, 6 * 86400, 7 * 86400]):
+        f = write(pdir / f"s{i}.jsonl", [user(f"q{i}"), asst(f"answer {i}")])
+        touch(f, now - age)
+        files.append(f)
+    got = daemon.sessions(str(cwd), minutes=30, older=2)
+    assert [g["transcript"] for g in got] == [str(f) for f in files[:3]]
+    assert [g["recent"] for g in got] == [True, False, False]
+    assert got[1]["preview"].startswith("answer 1")

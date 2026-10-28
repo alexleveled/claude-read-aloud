@@ -150,22 +150,33 @@ function activate(context) {
       busy = true;
       item.text = '$(loading~spin) Finding sessions...';
 
-      // More than one Claude session active recently in this folder: let the user pick.
+      // Always let the user pick: recent sessions first (newest preselected, so Enter reads
+      // it), then older ones from the same folder. A reader older than 0.3.0 sends no
+      // `recent` flag and only recent sessions, so a missing flag counts as recent.
       call({ cmd: 'sessions', cwd }, ['sessions', '--cwd', cwd], 30000, async (error, stdout) => {
         if (error && error.message === 'not installed') { busy = false; return setIdle(); }
         let sessions = [];
         try { sessions = error ? [] : JSON.parse(String(stdout)); } catch (e) { sessions = []; }
         if (sessions.length === 0) return startRead(['--cwd', cwd]);  // reader explains why
-        if (sessions.length === 1) return startRead(['--transcript', sessions[0].transcript]);
 
-        const ago = (s) => s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : `${Math.floor(s / 3600)} h ago`;
+        const ago = (s) => s < 60 ? 'just now'
+          : s < 3600 ? `${Math.floor(s / 60)} min ago`
+          : s < 172800 ? `${Math.floor(s / 3600)} h ago`
+          : `${Math.floor(s / 86400)} days ago`;
+        const toItem = (s) => ({
+          label: `$(play) ${s.project}`,
+          description: `${ago(s.age_seconds)}${s.title ? ' · ' + s.title : ''}`,
+          detail: s.preview,
+          transcript: s.transcript,
+        });
+        const recent = sessions.filter((s) => s.recent !== false);
+        const older = sessions.filter((s) => s.recent === false);
+        const Separator = vscode.QuickPickItemKind.Separator;
+        const items = [];
+        if (recent.length) items.push({ label: 'Recent', kind: Separator }, ...recent.map(toItem));
+        if (older.length) items.push({ label: 'Older', kind: Separator }, ...older.map(toItem));
         const pick = await vscode.window.showQuickPick(
-          sessions.map((s) => ({
-            label: `$(play) ${s.project}`,
-            description: `${ago(s.age_seconds)}${s.title ? ' · ' + s.title : ''}`,
-            detail: s.preview,
-            transcript: s.transcript,
-          })),
+          items,
           { placeHolder: 'Which Claude session should I read?', matchOnDescription: true, matchOnDetail: true }
         );
         if (!pick) { busy = false; return setIdle(); }

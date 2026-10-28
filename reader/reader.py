@@ -10,7 +10,7 @@
 
     reader.py read [--session ID] [--cwd DIR] [--transcript FILE] [--full]
     reader.py stop | status | shutdown
-    reader.py sessions [--cwd DIR] [--minutes N]      JSON list for the VS Code picker
+    reader.py sessions [--cwd DIR] [--minutes N] [--older N]  JSON list for the VS Code picker
     reader.py text FILE [--full]                      print the cleaned text (debug)
     reader.py settings [voice|speed|mode|model|warm_minutes VALUE]
     reader.py voices
@@ -109,8 +109,13 @@ def cmd_settings(args):
             value = int(value)
         except ValueError:
             return f"{key} must be a whole number of minutes."
+    elif key == "picker_older":
+        try:
+            value = int(value)
+        except ValueError:
+            return "picker_older must be a whole number of sessions."
     else:
-        return "Settings are voice, speed, mode, model, picker_minutes and warm_minutes."
+        return "Settings are voice, speed, mode, model, picker_minutes, picker_older and warm_minutes."
     home.save_settings(**{key: value})
     extra = " It downloads on the next read." if key == "model" and voice.missing(value) else ""
     return f"{key} set to {value}.{extra}"
@@ -216,6 +221,8 @@ def main():
             req = {"cmd": "sessions", "cwd": opts.get("--cwd") or os.getcwd()}
             if opts.get("--minutes"):
                 req["minutes"] = int(opts["--minutes"])
+            if opts.get("--older"):
+                req["older"] = int(opts["--older"])
             resp = ask(req)
             print(json.dumps(resp.get("data") or [], ensure_ascii=False))
         elif cmd == "text":

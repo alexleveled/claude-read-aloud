@@ -73,6 +73,8 @@ Everything lives in `~/.claude-voice/read-aloud/settings.json`. The commands abo
 | `speed` | `1.15` | |
 | `mode` | `final` | `full` makes every read include the whole turn |
 | `model` | `int8` | `int8` 92 MB, `fp16` 177 MB, `full` 326 MB. Same speed; the bigger ones sound slightly cleaner |
+| `picker_minutes` | `30` | VS Code picker: sessions active this recently are listed first, under Recent |
+| `picker_older` | `10` | VS Code picker: how many older sessions from the folder are listed under Older |
 | `warm_minutes` | `15` | how long the voice model stays loaded after a read. `0` loads it fresh every time |
 | `skip_sessions` | `[]` | text from the first message of sessions to never read, like an always-on bot that would otherwise always be "newest" |
 

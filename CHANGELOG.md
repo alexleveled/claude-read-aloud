@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- VS Code picker always opens, so you can read any session in the folder, not just ones active in the last 30 minutes. Recent sessions come first with the newest preselected (Enter reads it), then the 10 most recent older ones under Older. Before, the picker only appeared when two or more sessions had been active in the last 30 minutes, and otherwise read the newest one without asking.
+- New setting `picker_older` (default 10) sets how many older sessions the picker lists.
+- Picker previews are cached, so long transcripts are only parsed once.
+- VS Code extension 0.5.0 (reinstall it with `/read-aloud:read setup`, or `code --install-extension` on the bundled .vsix).
+
 ## 0.2.2
 
 - Asking in plain words ("read that to me", "read it out loud") now reads Claude's previous reply, the same as `/read-aloud:read`. Before, the request itself counted as the newest message and there was nothing to read.

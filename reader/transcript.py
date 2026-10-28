@@ -169,19 +169,24 @@ def last_reply(entries, full=False):
     return "\n\n".join(texts) if full else texts[-1]
 
 
-def session_info(f):
+def session_info(f, entries=None):
     """Project name and Claude's auto title for a transcript, for the VS Code picker."""
     cwd = title = None
-    for e in load(f):
+    for e in (load(f) if entries is None else entries):
         cwd = e.get("cwd") or cwd
         title = e.get("aiTitle") or title
     return (Path(cwd).name if cwd else f.parent.name), (title or "")
 
 
-def recent_sessions(cwd, minutes=30, skip=()):
-    """Interactive sessions under cwd (or its ancestors) that changed in the last `minutes`,
-    newest first. Returns (path, entries) pairs; the caller builds previews."""
-    cutoff = time.time() - minutes * 60
-    files = [f for d in project_dirs(cwd) for f in d.glob("*.jsonl") if f.stat().st_mtime >= cutoff]
+def all_sessions(cwd, skip=()):
+    """Interactive sessions under cwd (or its ancestors), newest first."""
+    files = [f for d in project_dirs(cwd) for f in d.glob("*.jsonl")]
     files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
     return [f for f in files if not is_skipped(f, skip)]
+
+
+def recent_sessions(cwd, minutes=30, skip=()):
+    """Interactive sessions under cwd (or its ancestors) that changed in the last `minutes`,
+    newest first."""
+    cutoff = time.time() - minutes * 60
+    return [f for f in all_sessions(cwd, skip) if f.stat().st_mtime >= cutoff]
